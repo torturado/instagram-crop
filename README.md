@@ -142,7 +142,7 @@ Es crucial que la numeración de los tiles por `test.go` y la lógica de ordenac
 
 ## Licencia
 
-Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para más detalles.
+Este proyecto está bajo la Licencia MIT. Consulta el archivo [LICENSE](https://github.com/torturado/instagram-crop/blob/main/LICENSE) para más detalles.
 
 ## Contribuciones
 
