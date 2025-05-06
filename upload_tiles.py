@@ -34,26 +34,27 @@ def get_sorted_tiles(directory):
     def sort_key(filepath):
         filename = os.path.basename(filepath)
         # Match one or more digits between tile_ and .jpg
-        match = re.match(r"^tile_(\d+)\.jpg$", filename)
+        match = re.match(r"^tile_(\\d+)\\.jpg$", filename)
         if match:
             num = int(match.group(1))
-            # Assuming a 3x3 grid numbered 1(top-left) to 9(bottom-right)
-            # This key ensures sorting happens in the natural reading order 1, 2, ..., 9
-            # If the grid size changes, this logic needs adjustment.
-            if 1 <= num <= 9: # Basic check for 3x3 grid numbers
-                # Convert number to 0-based (row, col) for sorting
-                r = (num - 1) // 3
-                c = (num - 1) % 3
-                logging.debug(f"File: {filename}, Num: {num}, Key: {(r, c)}")
-                return (r, c) # Sort by (row, col) tuple
-            else:
-                # Handle numbers outside 1-9 if necessary
-                logging.warning(f"File {filename} has number {num} outside expected 1-9 range.")
-                # Sort these potentially invalid files after the valid 1-9 range,
-                # but still numerically among themselves.
-                return (float('inf'), num)
+
+            if num <= 0: # Tile numbers should be positive.
+                logging.warning(f"File {filename} has non-positive number {num}. Will be sorted last.")
+                return (float('inf'), float('inf'))
+
+            # Assuming a fixed number of 3 columns for the grid, as specified.
+            # The number of rows can vary.
+            # This key ensures sorting happens in the natural reading order:
+            # tile_1, tile_2, tile_3 (first row)
+            # tile_4, tile_5, tile_6 (second row)
+            # and so on.
+            fixed_cols = 3
+            r = (num - 1) // fixed_cols
+            c = (num - 1) % fixed_cols
+            logging.debug(f"File: {filename}, Num: {num}, Key: {(r, c)}")
+            return (r, c) # Sort by (row, col) tuple
         else:
-            logging.warning(f"Filename {filename} does not match expected pattern '^tile_\\d+\\.jpg$'.")
+            logging.warning(f"Filename {filename} does not match expected pattern '^tile_\\\\d+\\\\.jpg$'. Will be sorted last.")
             # Sort unmatchable files last
             return (float('inf'), float('inf'))
 
