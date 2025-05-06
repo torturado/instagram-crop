@@ -4,6 +4,9 @@
 
 Una herramienta de línea de comandos escrita en Go para dividir imágenes en múltiples tiles (mosaicos) para crear un efecto de cuadrícula panorámica en perfiles de Instagram. Incluye opciones para manejar el tamaño de la imagen, zonas seguras con relleno o desenfoque, y genera una vista previa del mosaico completo.
 
+<img src="https://github.com/user-attachments/assets/769a33c2-09ad-4cba-aa5d-4801181e7dcd" width="300">
+
+
 ## Características
 
 *   Divide una imagen en una cuadrícula de `N` filas por `M` columnas.
