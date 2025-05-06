@@ -1,0 +1,26 @@
+# Binaries
+*.exe
+*.out
+instagram-grid-splitter
+test
+
+# Output directories from the script
+output/
+foto recortada/
+foto normal/
+tiles/
+
+# Environment files
+.env
+session.json
+
+# IDE and OS specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Go build cache
+go.work.sum 
