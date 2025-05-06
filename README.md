@@ -1,11 +1,8 @@
 # Go Instagram Grid Splitter
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/YOUR_USERNAME/YOUR_REPONAME)](https://goreportcard.com/report/github.com/YOUR_USERNAME/YOUR_REPONAME) <!-- Reemplaza YOUR_USERNAME/YOUR_REPONAME -->
+[![Go Report Card](https://goreportcard.com/badge/github.com/torturado/instagram-crop)](https://goreportcard.com/report/github.com/torturado/instagram-crop)
 
 Una herramienta de línea de comandos escrita en Go para dividir imágenes en múltiples tiles (mosaicos) para crear un efecto de cuadrícula panorámica en perfiles de Instagram. Incluye opciones para manejar el tamaño de la imagen, zonas seguras con relleno o desenfoque, y genera una vista previa del mosaico completo.
-
-<!-- Opcional: Añade una captura de pantalla o un GIF aquí mostrando un ejemplo del resultado -->
-<!-- ![Ejemplo de Mosaico en Instagram](link_a_tu_imagen_de_ejemplo.png) -->
 
 ## Características
 
@@ -33,8 +30,8 @@ Una herramienta de línea de comandos escrita en Go para dividir imágenes en m�
 
 1.  **Clona el repositorio:**
     ```bash
-    git clone https://github.com/YOUR_USERNAME/YOUR_REPONAME.git # Reemplaza YOUR_USERNAME/YOUR_REPONAME
-    cd YOUR_REPONAME # Reemplaza YOUR_REPONAME
+    git clone https://github.com/torturado/instagram-crop.git 
+    cd instagram-crop
     ```
 
 2.  **Construye el ejecutable:**
@@ -151,6 +148,4 @@ Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para má
 
 Las contribuciones son bienvenidas. Por favor, abre un *issue* primero para discutir lo que te gustaría cambiar o añade un *Pull Request*.
 
----
-
-*Hecho con ❤️ y Go* 
+--- 
