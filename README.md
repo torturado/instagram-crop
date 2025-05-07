@@ -27,7 +27,7 @@ Una herramienta de línea de comandos escrita en Go para dividir imágenes en m�
 
 ## Requisitos Previos
 
-*   **Go:** Versión 1.18 o superior (aunque podría funcionar con versiones anteriores, no ha sido probado extensamente). Tu script usa `golang.org/x/image` y `golang.org/x/font`, que se descargarán automáticamente si tienes Go configurado correctamente y los archivos `go.mod` y `go.sum` están presentes.
+*   **Go:** Versión 1.18 o superior (aunque podría funcionar con versiones anteriores, no ha sido probado extensamente). El script usa `golang.org/x/image` y `golang.org/x/font`, que se descargarán automáticamente si tienes Go configurado correctamente y los archivos `go.mod` y `go.sum` están presentes.
 
 ## Instalación / Construcción
 
