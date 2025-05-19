@@ -10,6 +10,7 @@ import (
 	"image/jpeg"
 	_ "image/png" // Import for decoding PNGs
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -24,6 +25,10 @@ import (
 	// Example using github.com/disintegration/imaging:
 	// "github.com/disintegration/imaging"
 	// Or implement a simple box blur or use x/image/blur if suitable
+
+	"github.com/rwcarlsen/goexif/exif"
+	"io/ioutil"
+	"encoding/json"
 )
 
 // Target dimensions and safe zone based on the Python script logic
@@ -59,6 +64,7 @@ func main() {
 	outDir := flag.String("out", "output", "Output directory path (default: ./output)")
 	edgeMode := flag.String("edge-mode", "pad", "Safe zone mode: 'pad' (white) or 'blur'") // Default 'pad' seems safer if blur isn't perfect
 	resizeMode := flag.String("resize-mode", "resize", "Action if image is smaller than grid: 'resize' or 'pad'")
+	fitMode := flag.String("fit-mode", "default", "How to fit image to grid: 'default' (legacy logic) or 'crop' (central crop+resize, no deformación) or 'manual' (manual crop selection)")
 	interactive := flag.Bool("interactive", false, "Use interactive prompts (not implemented)")
 	flag.Parse()
 
@@ -79,6 +85,9 @@ func main() {
 	if *resizeMode != "resize" && *resizeMode != "pad" {
 		fatal(errors.New("resize-mode must be 'resize' or 'pad'"))
 	}
+	if *fitMode != "default" && *fitMode != "crop" && *fitMode != "manual" {
+		fatal(errors.New("fit-mode must be 'default', 'crop', or 'manual'"))
+	}
 
 	// --- Create Output Directory ---
 	if err := os.MkdirAll(*outDir, 0755); err != nil {
@@ -97,53 +106,106 @@ func main() {
 	totalContentH := targetContentH * (*rows)
 	fmt.Printf("Required content size for %d x %d grid: %d x %d\n", *rows, *cols, totalContentW, totalContentH)
 
-	var processedSrc image.Image = src // Start with the original image
+	var processedSrc image.Image
 
-	// --- Handle Image Size Mismatch (Based on Python Logic) ---
-	if origW < totalContentW || origH < totalContentH {
-		action := *resizeMode
-		if *interactive {
-			// Interactive prompt would go here
-			fmt.Println("Warning: Original image is smaller than the required grid content size.")
-			fmt.Printf("Using specified resize-mode: %s\n", action)
+	if *fitMode == "crop" {
+		// --- Siempre hacer crop central (zoom) para encajar la proporción del grid ---
+		srcAspect := float64(origW) / float64(origH)
+		gridAspect := float64(totalContentW) / float64(totalContentH)
+
+		var cropW, cropH int
+		if srcAspect > gridAspect {
+			// Imagen más ancha que el grid: recorta a lo ancho
+			cropH = origH
+			cropW = int(float64(origH) * gridAspect)
 		} else {
-			fmt.Printf("Warning: Original image (%dx%d) is smaller than required grid content size (%dx%d).\n", origW, origH, totalContentW, totalContentH)
-			fmt.Printf("Applying resize-mode: %s\n", action)
+			// Imagen más alta que el grid: recorta a lo alto
+			cropW = origW
+			cropH = int(float64(origW) / gridAspect)
 		}
+		cropX := (origW - cropW) / 2
+		cropY := (origH - cropH) / 2
+		cropRect := image.Rect(cropX, cropY, cropX+cropW, cropY+cropH)
 
-		if action == "resize" {
-			fmt.Printf("Resizing image to fit content area: %d x %d\n", totalContentW, totalContentH)
-			resizedImg := image.NewRGBA(image.Rect(0, 0, totalContentW, totalContentH))
-			xdraw.CatmullRom.Scale(resizedImg, resizedImg.Bounds(), src, src.Bounds(), draw.Over, nil)
-			processedSrc = resizedImg
-		} else if action == "pad" {
-			fmt.Println("Padding image to fit content area...")
-			padW := max(0, totalContentW-origW)
-			padH := max(0, totalContentH-origH)
-			leftPad := padW / 2
-			topPad := padH / 2
-
-			paddedImg := image.NewRGBA(image.Rect(0, 0, totalContentW, totalContentH))
-			draw.Draw(paddedImg, paddedImg.Bounds(), image.Black, image.Point{}, draw.Src) // Fill background black
-			draw.Draw(paddedImg, image.Rect(leftPad, topPad, leftPad+origW, topPad+origH), src, image.Point{}, draw.Over)
-			processedSrc = paddedImg
-		}
-	} else if origW > totalContentW || origH > totalContentH {
-		fmt.Println("Image larger than required content size, center cropping...")
-		cropX := (origW - totalContentW) / 2
-		cropY := (origH - totalContentH) / 2
-		cropRect := image.Rect(cropX, cropY, cropX+totalContentW, cropY+totalContentH)
-
-		croppedImg := image.NewRGBA(image.Rect(0, 0, totalContentW, totalContentH))
+		croppedImg := image.NewRGBA(image.Rect(0, 0, cropW, cropH))
 		draw.Draw(croppedImg, croppedImg.Bounds(), src, cropRect.Min, draw.Src)
-		processedSrc = croppedImg
+
+		// Redimensiona el crop al tamaño del grid
+		resizedImg := image.NewRGBA(image.Rect(0, 0, totalContentW, totalContentH))
+		xdraw.CatmullRom.Scale(resizedImg, resizedImg.Bounds(), croppedImg, croppedImg.Bounds(), draw.Over, nil)
+		processedSrc = resizedImg
+	} else if *fitMode == "manual" {
+		// Llama al script Python
+		cmd := exec.Command("py", "crop_gui.py", *inPath, fmt.Sprint(*rows), fmt.Sprint(*cols))
+		err := cmd.Run()
+		if err != nil {
+			fatal(fmt.Errorf("error running crop_gui.py: %w", err))
+		}
+		// Lee las coordenadas
+		data, err := ioutil.ReadFile("crop_coords.json")
+		if err != nil {
+			fatal(fmt.Errorf("error reading crop_coords.json: %w", err))
+		}
+		var crop struct {
+			X int `json:"x"`
+			Y int `json:"y"`
+			W int `json:"w"`
+			H int `json:"h"`
+		}
+		json.Unmarshal(data, &crop)
+		cropRect := image.Rect(crop.X, crop.Y, crop.X+crop.W, crop.Y+crop.H)
+		croppedImg := image.NewRGBA(image.Rect(0, 0, crop.W, crop.H))
+		draw.Draw(croppedImg, croppedImg.Bounds(), src, cropRect.Min, draw.Src)
+		// Redimensiona al tamaño del grid
+		resizedImg := image.NewRGBA(image.Rect(0, 0, totalContentW, totalContentH))
+		xdraw.CatmullRom.Scale(resizedImg, resizedImg.Bounds(), croppedImg, croppedImg.Bounds(), draw.Over, nil)
+		processedSrc = resizedImg
 	} else {
-		fmt.Println("Image size matches required content size exactly.")
-		// Ensure processedSrc is drawable if it came directly from decode
-		if _, ok := processedSrc.(draw.Image); !ok {
-			rgba := image.NewRGBA(processedSrc.Bounds())
-			draw.Draw(rgba, rgba.Bounds(), processedSrc, image.Point{}, draw.Src)
-			processedSrc = rgba
+		// --- Modo legacy: resize/pad/crop según tamaño ---
+		processedSrc = src // Start with the original image
+		if origW < totalContentW || origH < totalContentH {
+			action := *resizeMode
+			if *interactive {
+				fmt.Println("Warning: Original image is smaller than the required grid content size.")
+				fmt.Printf("Using specified resize-mode: %s\n", action)
+			} else {
+				fmt.Printf("Warning: Original image (%dx%d) is smaller than required grid content size (%dx%d).\n", origW, origH, totalContentW, totalContentH)
+				fmt.Printf("Applying resize-mode: %s\n", action)
+			}
+
+			if action == "resize" {
+				fmt.Printf("Resizing image to fit content area: %d x %d\n", totalContentW, totalContentH)
+				resizedImg := image.NewRGBA(image.Rect(0, 0, totalContentW, totalContentH))
+				xdraw.CatmullRom.Scale(resizedImg, resizedImg.Bounds(), src, src.Bounds(), draw.Over, nil)
+				processedSrc = resizedImg
+			} else if action == "pad" {
+				fmt.Println("Padding image to fit content area...")
+				padW := max(0, totalContentW-origW)
+				padH := max(0, totalContentH-origH)
+				leftPad := padW / 2
+				topPad := padH / 2
+
+				paddedImg := image.NewRGBA(image.Rect(0, 0, totalContentW, totalContentH))
+				draw.Draw(paddedImg, paddedImg.Bounds(), image.Black, image.Point{}, draw.Src) // Fill background black
+				draw.Draw(paddedImg, image.Rect(leftPad, topPad, leftPad+origW, topPad+origH), src, image.Point{}, draw.Over)
+				processedSrc = paddedImg
+			}
+		} else if origW > totalContentW || origH > totalContentH {
+			fmt.Println("Image larger than required content size, center cropping...")
+			cropX := (origW - totalContentW) / 2
+			cropY := (origH - totalContentH) / 2
+			cropRect := image.Rect(cropX, cropY, cropX+totalContentW, cropY+totalContentH)
+
+			croppedImg := image.NewRGBA(image.Rect(0, 0, totalContentW, totalContentH))
+			draw.Draw(croppedImg, croppedImg.Bounds(), src, cropRect.Min, draw.Src)
+			processedSrc = croppedImg
+		} else {
+			fmt.Println("Image size matches required content size exactly.")
+			if _, ok := processedSrc.(draw.Image); !ok {
+				rgba := image.NewRGBA(processedSrc.Bounds())
+				draw.Draw(rgba, rgba.Bounds(), processedSrc, image.Point{}, draw.Src)
+				processedSrc = rgba
+			}
 		}
 	}
 
@@ -235,6 +297,27 @@ func main() {
 
 // --- Utility functions ---
 
+// Nueva función para rotar/voltear según orientación EXIF
+func fixOrientation(img image.Image, orientation int) image.Image {
+	// Implementa aquí la lógica de rotación/flip según el valor de orientation (1-8)
+	// Por simplicidad, aquí solo muestro el caso más común (6 = rotar 90°)
+	switch orientation {
+	case 6:
+		// Rotar 90° a la derecha
+		b := img.Bounds()
+		rotated := image.NewRGBA(image.Rect(0, 0, b.Dy(), b.Dx()))
+		for x := b.Min.X; x < b.Max.X; x++ {
+			for y := b.Min.Y; y < b.Max.Y; y++ {
+				rotated.Set(b.Max.Y-y-1, x, img.At(x, y))
+			}
+		}
+		return rotated
+	// Agrega aquí los otros casos (2-8) según la tabla EXIF
+	default:
+		return img
+	}
+}
+
 func load(path string) image.Image {
 	f, err := os.Open(path)
 	if err != nil {
@@ -247,6 +330,17 @@ func load(path string) image.Image {
 		fatal(fmt.Errorf("error decoding image '%s': %w", path, err))
 	}
 	fmt.Printf("Decoded image format: %s\n", format)
+
+	// Reabrir el archivo para leer EXIF (ya que image.Decode avanza el puntero)
+	f.Seek(0, 0)
+	x, err := exif.Decode(f)
+	if err == nil {
+		orient, err := x.Get(exif.Orientation)
+		if err == nil {
+			orientation, _ := orient.Int(0)
+			img = fixOrientation(img, orientation)
+		}
+	}
 	return img
 }
 
