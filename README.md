@@ -13,21 +13,31 @@ Una herramienta de línea de comandos escrita en Go para dividir imágenes en m�
 *   **Manejo de Dimensiones de Instagram:**
     *   Cada tile se genera con dimensiones finales de 1080x1350px (ratio 4:5).
     *   Incluye "zonas seguras" (`safeZoneW`) para asegurar que el contenido principal (1016px de ancho) sea visible en la vista de perfil de Instagram (que recorta a cuadrado).
+*   **Orientación EXIF:** La orientación de la imagen original (guardada en metadatos EXIF) ahora se detecta y corrige automáticamente para evitar imágenes rotadas.
 *   **Modos de Borde (`edge-mode`):**
     *   `pad`: Rellena las zonas seguras laterales con color blanco.
     *   `blur`: Rellena las zonas seguras laterales con una versión desenfocada del borde de la imagen (usando un simple Box Blur).
-*   **Manejo de Tamaño de Imagen de Entrada (`resize-mode`):**
-    *   Si la imagen es más pequeña que el contenido total del mosaico:
-        *   `resize`: Redimensiona la imagen para que encaje.
-        *   `pad`: Rellena la imagen con fondo negro hasta alcanzar el tamaño necesario.
-    *   Si la imagen es más grande: Se recorta desde el centro.
+*   **Manejo de Tamaño de Imagen de Entrada (`resize-mode` y nuevo `fit-mode`):**
+    *   **Modo por defecto (`-fit-mode default`):**
+        *   Si la imagen es más pequeña que el contenido total del mosaico, usa el flag `-resize-mode`:
+            *   `resize` (defecto): Redimensiona (estira/achata) la imagen para que encaje.
+            *   `pad`: Rellena la imagen con fondo negro hasta alcanzar el tamaño necesario, manteniendo la proporción.
+        *   Si la imagen es más grande: Se recorta desde el centro para encajar en el mosaico.
+    *   **Modo Crop Central (`-fit-mode crop`):**
+        *   Siempre recorta la imagen desde el centro y luego la redimensiona para que encaje perfectamente en la proporción del mosaico total, sin deformar la imagen. Ideal para asegurar que el sujeto principal quede bien encuadrado.
+    *   **Modo Manual Interactivo (`-fit-mode manual`):**
+        *   Abre una ventana de interfaz gráfica (GUI) donde puedes ver la imagen y mover un rectángulo de selección (con la proporción correcta del mosaico) para elegir visualmente el área de recorte deseada.
+        *   Este modo ofrece el mayor control sobre el encuadre final.
 *   **Numeración de Tiles Optimizada:** Los tiles se guardan en orden inverso (ej., `tile_3.jpg`, `tile_2.jpg`, `tile_1.jpg`) para facilitar su subida a Instagram en la secuencia correcta.
 *   **Vista Previa del Mosaico:** Genera una imagen `stitched_preview.jpg` que muestra todos los tiles unidos, con números superpuestos para indicar el orden de subida.
 *   Configurable mediante flags en la línea de comandos.
 
 ## Requisitos Previos
 
-*   **Go:** Versión 1.18 o superior (aunque podría funcionar con versiones anteriores, no ha sido probado extensamente). El script usa `golang.org/x/image` y `golang.org/x/font`, que se descargarán automáticamente si tienes Go configurado correctamente y los archivos `go.mod` y `go.sum` están presentes.
+*   **Go:** Versión 1.20 o superior. El script usa `golang.org/x/image`, `golang.org/x/font` y `github.com/rwcarlsen/goexif/exif` (esta última para leer metadatos EXIF). Estas dependencias se descargarán automáticamente si tienes Go configurado correctamente y los archivos `go.mod` y `go.sum` están presentes.
+*   **Python (para modo `-fit-mode manual`):**
+    *   Python 3.11 instalado y accesible en el PATH (generalmente como `python` o `py`).
+    *   Librería Pillow: `pip install Pillow`. Tkinter usualmente viene incluido con Python.
 
 ## Instalación / Construcción
 
@@ -68,28 +78,44 @@ O en Windows:
 *   `-edge-mode MODE`: Modo para las zonas seguras:
     *   `pad`: Relleno blanco (por defecto).
     *   `blur`: Desenfoque del borde.
-*   `-resize-mode MODE`: Acción si la imagen es más pequeña que la cuadrícula:
+*   `-resize-mode MODE`: (Usado solo con `-fit-mode default` si la imagen es más pequeña que la cuadrícula)
     *   `resize`: Redimensionar la imagen (por defecto).
     *   `pad`: Rellenar la imagen.
+*   `-fit-mode MODE`: Define cómo se ajusta la imagen a la cuadrícula total:
+    *   `default`: Lógica original de redimensionar/rellenar/recortar según el tamaño.
+    *   `crop`: Siempre realiza un recorte central y luego redimensiona para encajar la proporción del grid sin deformar.
+    *   `manual`: Abre una GUI para seleccionar el área de recorte manualmente.
 *   `-interactive`: (No implementado actualmente) Usar prompts interactivos.
 
 **Ejemplos:**
 
 1.  **Crear un mosaico simple de 1x3 (una fila, tres columnas) con relleno en los bordes:**
     ```bash
-    ./instagram-grid-splitter -in "mi_foto.jpg" -r 1 -c 3
+    ./instagram-grid-splitter -in "mi_foto.jpg" -r 3 -c 3
     ```
 
 2.  **Crear un mosaico de 2x2 con bordes desenfocados y redimensionar la imagen si es pequeña:**
     ```bash
-    ./instagram-grid-splitter -in "paisaje.png" -r 2 -c 2 -edge-mode blur -resize-mode resize -out "mosaico_paisaje"
+    ./instagram-grid-splitter -in "paisaje.png" -r 3 -c 3 -edge-mode blur -resize-mode resize -out "mosaico_paisaje"
     ```
+
+3.  **Crear un mosaico de 3x1 con recorte central automático para una foto vertical:**
+    ```bash
+    ./instagram-grid-splitter -in "retrato.jpg" -r 3 -c 3 -fit-mode crop
+    ```
+
+4.  **Crear un mosaico de 1x3 con selección manual del área de recorte:**
+    ```bash
+    ./instagram-grid-splitter -in "mi_foto_panoramica.jpg" -r 3 -c 3 -fit-mode manual
+    ```
+    (Se abrirá una ventana para que ajustes el recorte. Necesitas Python y Pillow instalados).
 
 ## Estructura del Proyecto
 
 ```
 .
 ├── test.go           # El script principal de Go para dividir imágenes
+├── crop_gui.py       # Script Python para la GUI de recorte manual
 ├── go.mod            # Módulo de Go
 ├── go.sum            # Checksums de dependencias de Go
 ├── upload_tiles.py   # Script de Python para subir los tiles a Instagram
